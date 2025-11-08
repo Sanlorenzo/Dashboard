@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Calendario (rango) → Descargar Excel</title>
+  <title>Descarga Datos a Excel</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
   <!-- Flatpickr: date range con 2 meses -->
@@ -38,13 +38,13 @@
   </style>
 </head>
 <body>
-  <header><div class="wrap"><h1>Selector de fechas y descarga a Excel</h1></div></header>
+  <header><div class="wrap"><h1>Selector de fechas y descarga de Niveles a Excel</h1></div></header>
 
   <main class="wrap">
     <div class="card">
       <div class="row">
         <div class="field">
-          <label>Rango de fechas (dos meses, estilo JetSMART)</label>
+          <label>Rango de fechas</label>
           <input id="dateRange" type="text" placeholder="Selecciona desde y hasta…" />
           <div class="hint">Mínimo <span class="pill">2025-08-01</span> · Sin fechas futuras · Se filtra por la columna <b>Fecha</b>.</div>
         </div>
@@ -227,3 +227,4 @@ async function fetchCSV(){
   </script>
 </body>
 </html>
+
