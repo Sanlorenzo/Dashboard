@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Calendario (rango) → Descargar Excel</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Flatpickr: date range con 2 meses -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style>
+    :root{
+      --brand:#00a3ad; --brand-2:#00919a;
+      --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial; margin:0; color:var(--ink)}
+    header{padding:22px 16px; border-bottom:1px solid var(--border)}
+    h1{margin:0; font-size:18px; font-weight:700}
+    .wrap{max-width:980px; margin:0 auto; padding:22px 16px}
+    .card{border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:0 8px 24px rgba(0,0,0,.04)}
+    .row{display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end}
+    .field{flex:1 1 280px; min-width:260px}
+    label{display:block; font-size:13px; color:var(--muted); margin:0 0 6px 2px}
+    input[type="text"]{width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:12px; font-size:14px}
+    .hint{font-size:12px; color:var(--muted); margin-top:6px}
+    .actions{display:flex; gap:12px; align-items:center}
+    button{appearance:none; border:0; border-radius:14px; padding:12px 16px; font-weight:700; cursor:pointer}
+    .btn-primary{background:var(--brand); color:#fff}
+    .btn-primary:hover{background:var(--brand-2)}
+    .btn-ghost{background:transparent; color:var(--muted)}
+    .status{font-size:13px; color:var(--muted)}
+    .flatpickr-calendar{box-shadow:0 12px 34px rgba(0,0,0,.1); border-radius:18px}
+    .flatpickr-day.inRange, .flatpickr-day.startRange, .flatpickr-day.endRange{
+      background:rgba(0,163,173,.12); border-color:rgba(0,163,173,.35);
+    }
+    .flatpickr-day.startRange,.flatpickr-day.endRange{background:var(--brand); color:#fff !important}
+    .pill{display:inline-block; padding:.25rem .5rem; border:1px solid var(--border); border-radius:999px; font-size:12px; color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header><div class="wrap"><h1>Selector de fechas y descarga a Excel</h1></div></header>
+
+  <main class="wrap">
+    <div class="card">
+      <div class="row">
+        <div class="field">
+          <label>Rango de fechas (dos meses, estilo JetSMART)</label>
+          <input id="dateRange" type="text" placeholder="Selecciona desde y hasta…" />
+          <div class="hint">Mínimo <span class="pill">2025-08-01</span> · Sin fechas futuras · Se filtra por la columna <b>Fecha</b>.</div>
+        </div>
+        <div class="actions">
+          <button id="btnDownload" class="btn-primary">Descargar Excel</button>
+          <button id="btnTest" class="btn-ghost">Probar filtro</button>
+        </div>
+      </div>
+      <div id="status" class="status" style="margin-top:12px;">Listo.</div>
+    </div>
+  </main>
+
+  <!-- Librerías (solo front): -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <script>
+  (function(){
+    // === CONFIG ===
+const SHEET_ID = "1ufuIHl3eXGvNn8lHq3zYcMNqn1IpXY86Tac3z18v1SI";
+// Usaremos la API de Consulta (Query API) de Google Sheets para evitar CORS.
+// El 'gid' 0 es para la primera hoja.
+const PUB_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=0`;
+const MIN_DATE = "2025-08-01";
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    const $status = document.getElementById("status");
+    const $btnDownload = document.getElementById("btnDownload");
+    const $btnTest = document.getElementById("btnTest");
+
+    // === Datepicker (2 meses, rango, hoy→atrás) ===
+    const fp = flatpickr("#dateRange", {
+      mode: "range",
+      dateFormat: "Y-m-d",
+      minDate: MIN_DATE,
+      maxDate: new Date(),
+      defaultDate: [new Date(), new Date()],
+      showMonths: 2,
+      disableMobile: true,
+      locale: {
+        firstDayOfWeek: 1,
+        weekdays: { shorthand: ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"], longhand: ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"] },
+        months: { shorthand: ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"],
+                  longhand: ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"] }
+      }
+    });
+
+    // === Utilidades fecha/hora ===
+    function parseYMD(s){ // "YYYY-MM-DD" → Date
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim());
+      if(!m) return null;
+      const d = new Date(+m[1], +m[2]-1, +m[3]); d.setHours(0,0,0,0); return d;
+    }
+    function parseHM(s){ // "HH:MM" → minutos desde 0
+      const m = /^(\d{2}):(\d{2})$/.exec(String(s).trim());
+      return m ? (+m[1])*60 + (+m[2]) : -1;
+    }
+    function getRange(){
+      const sel = fp.selectedDates;
+      if(sel.length === 2){
+        const a = new Date(sel[0]); a.setHours(0,0,0,0);
+        const b = new Date(sel[1]); b.setHours(0,0,0,0);
+        return a <= b ? [a,b] : [b,a];
+      }
+      if(sel.length === 1){ const a = new Date(sel[0]); a.setHours(0,0,0,0); return [a,a]; }
+      return [today, today];
+    }
+
+    // === Descarga CSV del Sheet (público) ===
+async function fetchCSV(){
+    const t0 = performance.now();
+    const res = await fetch(PUB_CSV_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} al intentar descargar CSV.`);
+    let text = await res.text();
+
+    // 1. Manejo especial para la respuesta de la API gviz/tq
+    if (text.startsWith("/*O_o*/")) {
+        // La respuesta de gviz/tq es envuelta. Ejemplo: /*O_o*/google.visualization.Query.setResponse({...});
+        try {
+            // Extraer el JSON dentro del envoltorio de la API (tqx=out:csv no siempre devuelve CSV puro)
+            const jsonText = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+            const data = JSON.parse(jsonText);
+            
+            if (data.status === 'error') {
+                 throw new Error(`Error en API de Google: ${data.errors[0].message}`);
+            }
+
+            // El CSV está en el campo 'table' o similar. La opción 'out:csv' debería darlo directo.
+            // Si funciona en tu navegador, la respuesta será 'text/csv' o similar, pero fetch lo ve como texto.
+            // Si el texto sigue pareciendo HTML o JSON, es porque la API falló en devolver el CSV puro.
+            
+            // Si estás usando tqx=out:csv, debería dar el CSV directo si es que está 'Publicado'.
+            // Si esto falla, intentamos una limpieza más profunda o usamos el método original:
+            
+            // Volvemos a probar la URL original, que ahora debe estar "Publicada en la Web":
+            // const resOriginal = await fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`, { cache: "no-store" });
+            // text = await resOriginal.text();
+            
+            // Para mantener el código con la URL gviz/tq, asumiremos que si llegamos aquí, 
+            // y no tiene <, es porque el CSV ya está ahí.
+        } catch(e) {
+            console.error("Error al parsear respuesta gviz/tq (posible JSON envuelto).", e);
+            // Si falla el parsing, volvemos al chequeo original de HTML por si Google devolvió otra cosa.
+        }
+    }
+
+
+    // 2. Comprobación de contenido (la que tenías)
+    if (text.trim().startsWith("<")) {
+      throw new Error("La respuesta parece HTML (no CSV). ¿Seguro que publicaste en la web la hoja correcta?");
+    }
+    
+    // Si la respuesta es de tipo CSV, debería pasar sin problemas a PapaParse.
+    document.getElementById("status").textContent = `CSV descargado en ${(performance.now()-t0|0)} ms.`;
+    return text;
+}
+
+    // === Filtrar por Fecha; ordenar Fecha + Hora; conservar 60 columnas ===
+    function filterAndSort(csvText, start, end){
+      const { data } = Papa.parse(csvText, { delimiter: ",", skipEmptyLines: true });
+      if(!data.length) return { headers: [], rows: [] };
+
+      const headers = data[0];         // fila de títulos
+      const body = data.slice(1);
+
+      // Buscar índices por nombre (robusto) con fallback a posiciones 0/1
+      const idxFecha = Math.max(headers.indexOf("Fecha"), 1);
+      const idxHora  = Math.max(headers.indexOf("Hora"), 0);
+
+      const minD = parseYMD(MIN_DATE);
+
+      const rows = body.filter(r=>{
+        const d = parseYMD(r[idxFecha]);
+        return d && d >= start && d <= end && d >= minD && d <= today;
+      });
+
+      // Ordenar por Fecha asc, luego Hora asc
+      rows.sort((a,b)=>{
+        const da = parseYMD(a[idxFecha]) - parseYMD(b[idxFecha]);
+        if(da !== 0) return da;
+        return parseHM(a[idxHora]) - parseHM(b[idxHora]);
+      });
+
+      return { headers, rows };
+    }
+
+    // === Descargar como Excel ===
+    function downloadXLSX(headers, rows, filename){
+      const aoa = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Filtrado");
+      XLSX.writeFile(wb, filename);
+    }
+
+    // === Eventos ===
+    $btnDownload.addEventListener("click", async ()=>{
+      try{
+        const [start, end] = getRange();
+        const s = start.toISOString().slice(0,10), e = end.toISOString().slice(0,10);
+        const csv = await fetchCSV();
+        const { headers, rows } = filterAndSort(csv, start, end);
+
+        if(!rows.length){ $status.textContent = `Sin registros para ${s} a ${e}.`; return; }
+        downloadXLSX(headers, rows, `Datos_${s}_a_${e}.xlsx`);
+        $status.textContent = `Excel descargado: ${rows.length} filas.`;
+      }catch(err){ console.error(err); $status.textContent = "Error: " + (err.message||err); }
+    });
+
+    $btnTest.addEventListener("click", async ()=>{
+      try{
+        const [start, end] = getRange();
+        const csv = await fetchCSV();
+        const { rows } = filterAndSort(csv, start, end);
+        $status.textContent = `Filas coincidentes: ${rows.length}`;
+      }catch(err){ $status.textContent = "Error: " + (err.message||err); }
+    });
+  })();
+  </script>
+</body>
+</html>

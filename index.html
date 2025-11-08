@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Panel Control</title>
+<style>
+  /* ===== Base / Reset ===== */
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f3f4f6;color:#0f172a}
+  a{color:inherit;text-decoration:none}
+
+  /* ===== Layout rows ===== */
+  .wrap{
+    min-height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:48px 16px 88px;
+    gap:120px; /* separa las filas para que no interfieran */
+  }
+  .menu-row{
+    width:100%;
+    max-width:1100px;
+    display:flex;
+    justify-content:center;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+
+  /* ===== Button (like shadcn <Button variant="outline">) ===== */
+  .btn{
+    appearance:none;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:.5rem;
+    padding:10px 14px;
+    font-weight:600;
+    border-radius:10px;
+    border:1px solid #cbd5e1;
+    background:#fff;
+    color:#0f172a;
+    box-shadow:0 1px 0 rgba(0,0,0,.02), 0 1px 2px rgba(0,0,0,.06);
+    transition:background .15s ease, box-shadow .15s ease, transform .04s ease;
+    cursor:pointer;
+    min-width:220px;
+  }
+  .btn:hover{background:#f8fafc}
+  .btn:active{transform:translateY(1px)}
+
+  /* ===== Dropdown (pure HTML using <details>) ===== */
+  details.dd{
+    position:relative;
+    display:inline-block;
+  }
+  details.dd > summary{
+    list-style:none;
+  }
+  details.dd > summary::-webkit-details-marker{display:none}
+
+  .caret{opacity:.55; transform:translateY(1px);}
+  details[open] .caret{transform:rotate(180deg) translateY(-1px); transition:transform .15s ease}
+
+  /* ===== Menu panel ===== */
+  .menu{
+    position:absolute;
+    top:calc(100% + 8px);
+    left:0;
+    min-width:280px;
+    background:#fff;
+    color:#0f172a;
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(15,23,42,.12), 0 2px 8px rgba(15,23,42,.06);
+    padding:8px;
+    z-index:60;
+  }
+  .label{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:.02em;
+    color:#64748b;
+    padding:8px 10px 6px;
+    text-transform:uppercase;
+  }
+  .group{padding:4px}
+  .item{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px;
+    padding:10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    user-select:none;
+    text-decoration:none;
+    color:#0f172a;
+  }
+  .item:hover{background:#f1f5f9}
+  .item[aria-disabled="true"]{opacity:.5; pointer-events:none}
+  .sep{height:1px; background:#e5e7eb; margin:6px 8px;}
+  .shortcut{font-size:12px; color:#64748b}
+
+  /* ===== Submenu ===== */
+  details.sub{position:relative;}
+  details.sub > summary{list-style:none; outline:none;}
+  details.sub > summary::-webkit-details-marker{display:none}
+  .submenu{
+    position:absolute;
+    top:-8px;
+    left:calc(100% + 8px);
+    min-width:220px;
+    background:#fff;
+    color:#0f172a;
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(15,23,42,.12), 0 2px 8px rgba(15,23,42,.06);
+    padding:8px;
+    z-index:70;
+  }
+
+  /* close menus when clicking outside */
+  .scrim{display:none; position:fixed; inset:0;}
+  details[open] ~ .scrim{display:block}
+
+  /* ===== Clock ===== */
+  .clock{
+    position:fixed; right:16px; bottom:16px;
+    background:rgba(2,6,23,.72); color:#fff;
+    border:1px solid rgba(255,255,255,.08);
+    padding:10px 14px; border-radius:12px; font-weight:700;
+    box-shadow:0 8px 20px rgba(0,0,0,.3);
+  }
+  .clock .time{font-size:20px; margin-right:10px}
+  .clock .date{font-size:13px; opacity:.9}
+</style>
+</head>
+<body>
+  <!-- Logo y título -->
+<div style="text-align:center; margin-top:30px;">
+  <img 
+    src="data:image/png;base64,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"/>
+<div>
+  <h2>Panel de Datos</h2>
+  </div>
+  <div class="wrap">
+
+    <!-- ===== Fila 1 ===== -->
+    <div class="menu-row">
+      <details class="dd">
+        <summary class="btn">
+          Niveles (Piscinas y Flujos)
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <div class="menu" role="menu" aria-label="Niveles">
+          <div class="label">Niveles</div>
+          <div class="group">
+            <a class="item" target="_blank" href="https://docs.google.com/spreadsheets/d/1ufuIHl3eXGvNn8lHq3zYcMNqn1IpXY86Tac3z18v1SI/edit?gid=0#gid=0">Ver Base de Datos Histórica</a>
+            <a class="item" target="_blank" href="LINKAQUÍFREDDY">Extraer Rango en Excel</a>
+          </div>
+        </div>
+        <div class="scrim"></div>
+      </details>
+
+      <details class="dd">
+        <summary class="btn">
+          Concentraciones PQ
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <div class="menu" role="menu" aria-label="Concentraciones PQ">
+          <div class="label">PQ</div>
+          <div class="group">
+            <a class="item" target="_blank" href="https://docs.google.com/forms/d/e/1FAIpQLSfdv9erb3LStJLJ4_odnIrafE9CM8DNBkyI-M1nRgga--RGpQ/viewform?usp=header">Agregar Concentración</a>
+            <a class="item" target="_blank" href="https://docs.google.com/spreadsheets/d/11oR8SCKV5sNznDPlt0SVnLaDKRGK0E6M_-Edbp_oS3E/edit?gid=1398837241#gid=1398837241">Ver BD Concentraciones</a>
+          </div>
+        </div>
+        <div class="scrim"></div>
+      </details>
+
+      <details class="dd">
+        <summary class="btn">
+          Generadores
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <div class="menu" role="menu" aria-label="Generadores">
+          <div class="label">Operación</div>
+          <div class="group">
+            <a class="item" target="_blank" href="https://docs.google.com/forms/d/e/1FAIpQLSeHCn4o2UPvJagGbV_QNk-Oa5_gFO4wU9sxZT_ZsNxRPA-DeA/viewform?usp=header">Agregar Recarga Generador</a>
+            <a class="item" target="_blank" href="LINKAQUÍFREDDY">Agregar Consumo E. bomba</a>
+            <a class="item" target="_blank" href="https://docs.google.com/spreadsheets/d/1gFfB6nXCrFFr9rE7H6wPdoDKo8VL5ReT6gJEleDPUZk/edit?gid=213987015#gid=213987015">Ver BD GG</a>
+          </div>
+        </div>
+        <div class="scrim"></div>
+      </details>
+    </div>
+
+    <!-- ===== Fila 2 ===== -->
+    <div class="menu-row">
+      <details class="dd">
+        <summary class="btn">
+          Concentraciones Pilas
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <div class="menu" role="menu" aria-label="Concentraciones Pilas">
+          <div class="label">Pilas</div>
+          <div class="group">
+            <a class="item" target="_blank" href="LINKAQUÍFREDDY">Agregar Conc. Pila</a>
+            <a class="item" target="_blank" href="LINKAQUÍFREDDY">Ver BD Conc. Pilas</a>
+          </div>
+        </div>
+        <div class="scrim"></div>
+      </details>
+
+      <details class="dd">
+        <summary class="btn">
+          Q solutions
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <div class="menu" role="menu" aria-label="Q solutions">
+          <div class="group">
+            <a class="item" target="_blank" href="https://tecnoiquique.qsolutions.cloud/">Ir a Q solutions</a>
+          </div>
+        </div>
+        <div class="scrim"></div>
+      </details>
+
+      <details class="dd">
+        <summary class="btn">
+          Acceso a Drive
+          <svg class="caret" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </summary>
+        <div class="menu" role="menu" aria-label="Acceso a Drive">
+          <div class="group">
+            <a class="item" target="_blank" href="https://drive.google.com/drive/home">Abrir Drive</a>
+          </div>
+        </div>
+        <div class="scrim"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Clock -->
+  <div class="clock" aria-live="polite">
+    <span class="time" id="time">--:--:--</span>
+    <span class="date" id="date">--/--/----</span>
+  </div>
+
+<script>
+  // Cerrar cualquier <details> si se hace clic fuera
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('details.dd[open], details.sub[open]').forEach(d => {
+      if (!d.contains(e.target)) d.removeAttribute('open');
+    });
+  });
+
+  // Clock Chile: hh:mm:ss (24h) y dd/mm/aaaa
+  (function(){
+    const tz = "America/Santiago";
+    const elTime = document.getElementById("time");
+    const elDate = document.getElementById("date");
+    function update(){
+      const now = new Date();
+      const parts = new Intl.DateTimeFormat('es-CL', {
+        timeZone: tz, hour12:false,
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit', second:'2-digit'
+      }).formatToParts(now);
+      const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+      elTime.textContent = `${map.hour}:${map.minute}:${map.second}`;
+      elDate.textContent = `${map.day}/${map.month}/${map.year}`;
+    }
+    update();
+    setInterval(update, 1000);
+  })();
+</script>
+</body>
+</html>
